@@ -1,0 +1,49 @@
+# Pliki skompilowane
+*.o
+*.obj
+*.exe
+*.out
+*.app
+
+# Biblioteki
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Debug
+*.pdb
+*.ilk
+*.idb
+
+# Foldery budowania
+build/
+out/
+bin/
+obj/
+x64/
+x86/
+Debug/
+Release/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# IDE
+.vscode/
+.idea/
+*.swp
