@@ -1,0 +1,16 @@
+\begin{table}[H]
+\centering
+\caption{Średni czas sortowania [ms] $\pm$ odch. std. (100 powtórzeń) — tablica odwrócona.}
+\label{tab:summary_reverse}
+\begin{tabular}{rccc}
+\toprule
+$n$ & Merge sort & Quicksort (med-3) & Introsort \\
+\midrule
+\num{10000} & $0.174 \pm 0.028$ & $0.236 \pm 0.032$ & $0.241 \pm 0.036$ \\
+\num{50000} & $0.980 \pm 0.124$ & $1.454 \pm 0.089$ & $1.441 \pm 0.104$ \\
+\num{100000} & $2.046 \pm 0.122$ & $3.272 \pm 0.282$ & $3.590 \pm 1.106$ \\
+\num{500000} & $12.127 \pm 0.530$ & $19.181 \pm 1.588$ & $18.782 \pm 0.696$ \\
+\num{1000000} & $29.697 \pm 5.000$ & $42.233 \pm 5.561$ & $39.869 \pm 0.909$ \\
+\bottomrule
+\end{tabular}
+\end{table}

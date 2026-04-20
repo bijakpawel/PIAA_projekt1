@@ -1,0 +1,16 @@
+\begin{table}[H]
+\centering
+\caption{Średni czas sortowania [ms] $\pm$ odch. std. (100 powtórzeń) — dane losowe.}
+\label{tab:summary_random}
+\begin{tabular}{rccc}
+\toprule
+$n$ & Merge sort & Quicksort (med-3) & Introsort \\
+\midrule
+\num{10000} & $0.706 \pm 0.102$ & $0.604 \pm 0.100$ & $0.520 \pm 0.096$ \\
+\num{50000} & $4.039 \pm 0.266$ & $3.497 \pm 0.258$ & $3.024 \pm 0.207$ \\
+\num{100000} & $8.391 \pm 0.395$ & $7.264 \pm 0.620$ & $6.268 \pm 0.300$ \\
+\num{500000} & $50.700 \pm 5.599$ & $40.686 \pm 1.570$ & $36.226 \pm 1.002$ \\
+\num{1000000} & $103.066 \pm 3.777$ & $83.602 \pm 1.509$ & $77.396 \pm 11.253$ \\
+\bottomrule
+\end{tabular}
+\end{table}
