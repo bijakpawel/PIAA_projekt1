@@ -1,8 +1,5 @@
 % !TeX program = pdflatex
-% Szkielet sprawozdania do projektu 1 z PIAA.
-% Do wypełnienia: sekcje "Wprowadzenie", "Wyniki" (komentarz do wykresów) i "Wnioski".
-% Wykresy ładowane są z ../plots/, tabele generowane są z ../results/summary.csv
-% przez skrypt plots/make_tex_tables.py.
+% Sprawozdanie do projektu 1 z PIAA — analiza algorytmów sortowania.
 
 \documentclass[11pt,a4paper]{article}
 
@@ -47,173 +44,360 @@
 
 \begin{abstract}
 W pracy zaimplementowano trzy algorytmy sortowania: sortowanie przez scalanie (\emph{merge sort}),
-szybkie sortowanie z wyborem pivota metodą mediany z trzech (\emph{quicksort, med-of-3}) oraz
-introspektywne sortowanie (\emph{introsort}). Każdy algorytm zrealizowano w postaci szablonu w
-języku C++17 i poddano eksperymentalnej analizie złożoności czasowej dla tablic liczb całkowitych
-o~rozmiarach od~$10^4$ do~$10^6$ oraz ośmiu scenariuszy rozkładu danych wejściowych.
+szybkie sortowanie z~wyborem pivota metodą mediany z~trzech (\emph{quicksort, med-of-3}) oraz
+sortowanie introspektywne (\emph{introsort}). Każdy algorytm zrealizowano w~postaci szablonu w~języku
+C++17 i~poddano eksperymentalnej analizie złożoności czasowej. Pomiary wykonano dla~tablic liczb
+całkowitych o~rozmiarach od~$10^4$ do~$10^6$ oraz ośmiu scenariuszy rozkładu danych wejściowych.
+Najważniejszym zaobserwowanym zjawiskiem jest paradoksalne spowolnienie quicksorta na~tablicach
+\emph{prawie} posortowanych (osiąga ono nawet $15{,}5$-krotny~narzut względem merge sorta dla~$n=10^6$
+i~$99{,}7\,\%$ wstępnego uporządkowania), przy~jednoczesnym wyraźnym przyspieszeniu merge sorta
+na~tych samych danych.
 \end{abstract}
+
+\tableofcontents
 
 \section{Wprowadzenie}
 
 \paragraph{Cel projektu.}
 Celem projektu jest zaimplementowanie trzech wybranych algorytmów sortowania oraz przeprowadzenie
-eksperymentalnej analizy ich efektywności dla różnych rozmiarów i~różnych rozkładów początkowych
-tablic wejściowych.
+eksperymentalnej analizy ich efektywności dla~różnych rozmiarów i~różnych rozkładów początkowych
+tablic wejściowych. Analiza empiryczna jest uzupełnieniem teoretycznej analizy złożoności: pozwala
+zweryfikować, czy~rzeczywiste zachowanie algorytmów odpowiada przewidywanemu asymptotycznemu
+tempu~wzrostu oraz~jakie dodatkowe zjawiska (stałe proporcjonalności, efekty pamięci podręcznej,
+nierównowaga partycji) dochodzą~do~głosu w~praktyce.
 
 \paragraph{Zakres pracy.}
 \begin{itemize}[nosep]
-  \item Implementacja algorytmów w~postaci szablonów w~języku C++17
-  (sortowanie tablic elementów dowolnego typu wspierającego komparator).
-  \item Obsługa wyboru uporządkowania rosnącego lub malejącego przez podanie komparatora
-  (\texttt{std::less} / \texttt{std::greater}).
-  \item Pomiary czasu wykonania na $100$ losowych tablicach dla każdej konfiguracji
-  (rozmiar $\times$ scenariusz $\times$ algorytm).
-  \item Zestawienie wyników w~formie tabel oraz wykresów.
+  \item Implementacja algorytmów w~postaci szablonów w~języku C++17, umożliwiająca sortowanie
+  tablic elementów dowolnego typu wspierającego komparator.
+  \item Obsługa wyboru sposobu uporządkowania (rosnąco lub~malejąco) poprzez~parametr komparatora
+  (\texttt{std::less} lub~\texttt{std::greater}).
+  \item Pomiary czasu wykonania na~$100$ tablicach dla~każdej konfiguracji
+  (rozmiar~$\times$~scenariusz~$\times$~algorytm).
+  \item Zestawienie wyników w~formie tabel i~wykresów oraz ich analiza.
 \end{itemize}
 
 \paragraph{Środowisko testowe.}
-Pomiary przeprowadzono na systemie Windows 10, kompilator g++ 15.2.0 (MSYS2 UCRT64),
-flagi \texttt{-std=c++17 -O2}. Pomiar czasu: \texttt{std::chrono::steady\_clock}.
+Pomiary przeprowadzono na~systemie Windows~10, kompilator g++~$15{,}2{,}0$ (MSYS2 UCRT64),
+flagi optymalizacji \texttt{-std=c++17~-O2}. Pomiar czasu: \texttt{std::chrono::steady\_clock}.
+Generator liczb pseudolosowych: \texttt{std::mt19937\_64} z~deterministycznym ziarnem,
+co~zapewnia powtarzalność wyników.
 
 \section{Opis badanych algorytmów}
 
 \subsection{Sortowanie przez scalanie (merge sort)}
 
 Klasyczne rozwiązanie metodą \emph{dziel i~zwyciężaj}: tablica jest rekurencyjnie dzielona na~pół,
-po~czym posortowane połówki są scalane z~użyciem bufora pomocniczego rozmiaru~$n$.
+po~czym posortowane połówki są scalane z~użyciem bufora pomocniczego rozmiaru~$n$. W~fazie scalania
+porównywane są czołowe elementy obu~podtablic; przy~równości wybierany jest element z~lewej
+podtablicy, co~zapewnia stabilność algorytmu.
 
 \begin{itemize}[nosep]
   \item Złożoność \emph{przeciętna} i~\emph{pesymistyczna}: $\Theta(n\log n)$.
   \item Algorytm jest \emph{stabilny} (zachowuje względną kolejność elementów równych).
-  \item Wymaga dodatkowej pamięci $\Theta(n)$.
+  \item Wymaga dodatkowej pamięci $\Theta(n)$ na~bufor.
 \end{itemize}
 
-\subsection{Quicksort z medianą z trzech}
+Zależność rekurencyjna:
+\[
+T(n) = 2T(n/2) + \Theta(n) = \Theta(n\log n).
+\]
 
-Rozwiązanie metodą \emph{dziel i~zwyciężaj} z~partycjonowaniem \emph{Lomuto}. Pivot wybierany jest
-jako mediana z~trzech wartości: pierwszego, środkowego i~ostatniego elementu bieżącego podprzedziału.
-Wybór mediany z~trzech eliminuje pesymistyczny przypadek $O(n^2)$ dla tablic już posortowanych lub
-posortowanych odwrotnie.
+\subsection{Quicksort z~medianą z~trzech}
+
+Rozwiązanie metodą \emph{dziel i~zwyciężaj} z~partycjonowaniem Lomuto. Pivot wybierany jest jako
+mediana z~trzech wartości: pierwszego, środkowego i~ostatniego elementu bieżącego podprzedziału.
+Wybór mediany z~trzech zamiast pojedynczego, stałego wyboru (np.~pierwszego elementu) eliminuje
+pesymistyczny przypadek $O(n^2)$ dla~tablic już posortowanych lub~posortowanych odwrotnie, ponieważ
+dla~takich danych wybrana mediana daje partycje zrównoważone.
 
 \begin{itemize}[nosep]
   \item Złożoność \emph{przeciętna}: $\Theta(n\log n)$.
-  \item Złożoność \emph{pesymistyczna}: $\Theta(n^2)$ (bardzo rzadka przy medianie z trzech, ale
-  możliwa przy specjalnie dobranych danych).
-  \item Sortuje w~miejscu, narzut pamięciowy stosu $\Theta(\log n)$ dzięki eliminacji rekurencji
-  ogonowej (rekurencja wchodzi zawsze w~mniejszą z~dwóch części).
+  \item Złożoność \emph{pesymistyczna}: $\Theta(n^2)$ (przy~medianie z~trzech bardzo rzadka;
+  wymaga danych specjalnie dobranych tak, aby~każdy kolejny pivot był ekstremum podprzedziału).
+  \item Sortuje w~miejscu, narzut pamięciowy stosu $\Theta(\log n)$ dzięki eliminacji
+  rekurencji ogonowej — rekurencja wchodzi zawsze w~mniejszą z~dwóch części, a~w~większej
+  kontynuowana jest pętla iteracyjna.
   \item Nie jest stabilny.
 \end{itemize}
 
 \subsection{Introsort}
 
-Hybrydowy algorytm zaproponowany przez Dawida Mussera (1997), łączący trzy techniki:
+Hybrydowy algorytm zaproponowany przez~Dawida~Mussera~(1997), łączący trzy techniki:
 \begin{enumerate}[nosep]
   \item quicksort z~medianą z~trzech jako algorytm główny,
   \item przełączenie na~\emph{heapsort} po~przekroczeniu limitu głębokości rekurencji
-  $2\log_2 n$ — gwarantuje $O(n\log n)$ w~najgorszym przypadku,
-  \item \emph{insertion sort} jako finisher dla bardzo krótkich podtablic
-  (próg: $16$ elementów).
+  $\lfloor 2\log_2 n \rfloor$ --- gwarantuje~to~złożoność $O(n\log n)$ również~w~najgorszym~przypadku,
+  \item \emph{insertion sort} jako finisher dla~krótkich podtablic (zaimplementowany próg:
+  $16$~elementów), co~pozwala uniknąć narzutu rekurencji dla~małych podproblemów.
 \end{enumerate}
 
 \begin{itemize}[nosep]
   \item Złożoność \emph{przeciętna} i~\emph{pesymistyczna}: $\Theta(n\log n)$.
   \item Sortuje w~miejscu.
+  \item Nie jest stabilny.
 \end{itemize}
+
+Introsort jest algorytmem wykorzystywanym w~bibliotece standardowej C++ (\texttt{std::sort})
+w~wielu implementacjach (m.in.~libstdc++), co~świadczy o~jego praktycznej uniwersalności.
+
+\subsection{Parametr uporządkowania}
+
+Wszystkie trzy implementacje przyjmują opcjonalny komparator jako~parametr szablonowy. Domyślną
+wartością jest \texttt{std::less<T>}, co~odpowiada sortowaniu rosnącemu; przekazanie
+\texttt{std::greater<T>} zmienia~porządek na~malejący. Dzięki~temu ta~sama procedura obsługuje
+oba~warianty wymagane w~specyfikacji projektu, a~także ułatwia generowanie tablic testowych
+(posortowana odwrotnie względem docelowego porządku).
 
 \section{Przeprowadzone eksperymenty}
 
 \subsection{Konfiguracja}
 
-Dla każdego algorytmu uruchomiono sortowanie na~$100$ tablicach liczb całkowitych
-(\texttt{int}) dla każdej z~pięciu wartości rozmiaru
-$n \in \{10\,000;\ 50\,000;\ 100\,000;\ 500\,000;\ 1\,000\,000\}$ oraz ośmiu scenariuszy rozkładu
-danych:
+Dla każdego algorytmu uruchomiono sortowanie na~$100$ tablicach liczb całkowitych (\texttt{int}),
+dla~każdej z~pięciu wartości rozmiaru
+\[
+n \in \{10\,000;\ 50\,000;\ 100\,000;\ 500\,000;\ 1\,000\,000\}
+\]
+oraz ośmiu scenariuszy rozkładu danych:
 
 \begin{itemize}[nosep]
-  \item \textbf{losowa} — wszystkie elementy wylosowane z~zakresu \texttt{int};
-  \item \textbf{25\,\% / 50\,\% / 75\,\% / 95\,\% / 99\,\% / 99,7\,\% posortowane} — wskazany
+  \item \textbf{losowa} --- wszystkie elementy wylosowane z~zakresu \texttt{int};
+  \item \textbf{25\,\% / 50\,\% / 75\,\% / 95\,\% / 99\,\% / 99,7\,\% posortowane} --- wskazany
   odsetek początkowych elementów jest już uporządkowany rosnąco, reszta losowa;
-  \item \textbf{odwrócona} — tablica posortowana malejąco (odwrotnie do~docelowego porządku).
+  \item \textbf{odwrócona} --- tablica posortowana malejąco, czyli w~porządku odwrotnym
+  do~docelowego.
 \end{itemize}
 
-Łącznie wykonano $5 \times 8 \times 100 \times 3 = 12\,000$ pojedynczych sortowań. Poprawność
-każdego wyniku zweryfikowano rutyną \texttt{isSorted}.
+Łącznie wykonano $5 \times 8 \times 100 \times 3 = 12\,000$ pojedynczych sortowań.
+Dla~każdej trójki (rozmiar, scenariusz, numer iteracji) wygenerowano jedną tablicę,
+na~której następnie kolejno uruchomiono każdy z~trzech algorytmów, dzięki~czemu pomiary różnią się
+wyłącznie algorytmem a~nie~danymi wejściowymi.
 
-\subsection{Zestawienie wyników}
+\subsection{Weryfikacja poprawności}
 
-Poniżej przedstawiono średnie czasy sortowania (w~milisekundach) dla każdej trójki
-(algorytm, rozmiar, scenariusz). Pełne dane liczbowe znajdują się w~pliku
-\texttt{results/summary.csv}; tabele LaTeX w~\texttt{report/tables/}.
+Zastosowano dwupoziomowe sprawdzanie poprawności zgodnie ze~wskazówką z~treści zadania:
+\begin{itemize}[nosep]
+  \item dla~\emph{małych tablic} (program \texttt{build/demo.exe}) --- wizualne porównanie wyniku
+  dla~tablic typu \texttt{int}, \texttt{double} oraz \texttt{std::string}, w~obu kierunkach
+  uporządkowania;
+  \item dla~\emph{dużych tablic} (benchmark) --- procedura \texttt{isSorted} sprawdza monotoniczność
+  wyjścia po~każdym z~$12\,000$ sortowań. Program benchmarka przerywa pracę i~sygnalizuje błąd,
+  jeśli~którykolwiek algorytm wyprodukuje tablicę nieuporządkowaną. W~trakcie całego eksperymentu
+  nie~odnotowano takiego przypadku.
+\end{itemize}
 
-% Automatycznie wstawiane tabele (generowane przez plots/make_tex_tables.py):
+\section{Wyniki pomiarów}
+
+\subsection{Tabele}
+
+W~tabelach~\ref{tab:summary_random}--\ref{tab:summary_reverse} zestawiono średnie czasy sortowania
+(w~milisekundach) wraz~z~odchyleniem standardowym, dla~każdej z~pięciu wartości~$n$ i~każdego
+z~trzech algorytmów. Pełne dane liczbowe ($12\,000$~pomiarów) znajdują się w~pliku
+\texttt{results/raw.csv}, zestawienie statystyk w~\texttt{results/summary.csv}.
+
 \input{tables/summary_random.tex}
+\input{tables/summary_sorted_25.tex}
 \input{tables/summary_sorted_50.tex}
+\input{tables/summary_sorted_75.tex}
+\input{tables/summary_sorted_95.tex}
+\input{tables/summary_sorted_99.tex}
 \input{tables/summary_sorted_99_7.tex}
 \input{tables/summary_reverse.tex}
 
 \subsection{Wykresy}
 
+Ilustracje~\ref{fig:time_random}--\ref{fig:normalized} przedstawiają graficznie wyniki
+zebrane w~tabelach.
+
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.85\linewidth]{time_vs_size__random.png}
-  \caption{Czas sortowania w~funkcji rozmiaru tablicy — dane losowe.}
+  \includegraphics[width=0.82\linewidth]{time_vs_size__random.png}
+  \caption{Czas sortowania w~funkcji rozmiaru tablicy --- dane losowe.
+           Linie praktycznie równoległe, co~potwierdza wspólną klasę $\Theta(n\log n)$.}
+  \label{fig:time_random}
 \end{figure}
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.85\linewidth]{time_vs_size__sorted_99_7.png}
-  \caption{Czas sortowania — 99,7\,\% elementów początkowo posortowanych.
-           Widoczny gwałtowny wzrost kosztu quicksorta.}
+  \includegraphics[width=0.82\linewidth]{time_vs_size__sorted_99_7.png}
+  \caption{Czas sortowania --- 99,7\,\% elementów początkowo posortowanych.
+           Widoczny gwałtowny wzrost kosztu quicksorta względem merge sorta i~introsorta.}
+  \label{fig:time_sorted_997}
 \end{figure}
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.85\linewidth]{time_vs_size__reverse.png}
-  \caption{Czas sortowania — tablica posortowana odwrotnie. Mediana z~trzech
-           sprawia, że quicksort nie degraduje się do~$O(n^2)$.}
+  \includegraphics[width=0.82\linewidth]{time_vs_size__reverse.png}
+  \caption{Czas sortowania --- tablica posortowana odwrotnie. Mediana z~trzech sprawia,
+           że~quicksort \emph{nie} degraduje się w~tym~scenariuszu do~$O(n^2)$.}
+  \label{fig:time_reverse}
 \end{figure}
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.95\linewidth]{bars_n_1000000.png}
-  \caption{Porównanie trzech algorytmów dla $n=10^6$ we~wszystkich scenariuszach.}
+  \caption{Porównanie trzech algorytmów dla~$n=10^6$ we~wszystkich ośmiu scenariuszach
+           (wykres słupkowy).}
+  \label{fig:bars_1M}
 \end{figure}
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.85\linewidth]{normalized__random.png}
-  \caption{Znormalizowany czas $t / (n\log_2 n)$ — zbliżona wartość dla różnych $n$
-           potwierdza empirycznie złożoność $\Theta(n\log n)$.}
+  \includegraphics[width=0.82\linewidth]{normalized__random.png}
+  \caption{Znormalizowany czas $t / (n\log_2 n)$ dla~danych losowych. Zbliżone wartości w~całym
+           zakresie $n$ potwierdzają empirycznie złożoność $\Theta(n\log n)$.}
+  \label{fig:normalized}
 \end{figure}
+
+\section{Analiza wyników}
+
+\subsection{Dane losowe}
+
+W~scenariuszu losowym porządek jakościowy algorytmów jest stabilny we~wszystkich testowanych
+rozmiarach: \textbf{introsort} $<$ \textbf{quicksort} $<$ \textbf{merge sort} (od~najszybszego).
+Dla~$n=10^6$ uzyskano odpowiednio~$77{,}4$~ms, $83{,}6$~ms oraz $103{,}1$~ms. Przewaga introsorta
+nad~quicksortem ($\approx 7{,}4\,\%$) wynika głównie z~zastosowania sortowania przez wstawianie
+na~krótkich podtablicach, co~eliminuje narzut rekurencji dla~$\leq\! 16$~elementów. Merge sort jest
+wolniejszy od~pozostałych dwóch przede wszystkim z~powodu konieczności alokacji i~używania bufora
+rozmiaru~$n$, co~generuje dodatkowe ruchy pamięciowe oraz~obciąża pamięć podręczną.
+
+Wykres znormalizowany (rys.~\ref{fig:normalized}) pokazuje, że~stosunek $t/(n\log_2 n)$ pozostaje
+praktycznie stały w~całym badanym zakresie $n$, co~stanowi empiryczne potwierdzenie złożoności
+$\Theta(n\log n)$. Dla~każdego algorytmu wartość ta~wynosi~ok.~$4$--$5$~ns.
+
+\subsection{Dane częściowo posortowane (25\,\%--75\,\%)}
+
+Wraz~ze~wzrostem odsetka wstępnie uporządkowanych elementów merge sort systematycznie
+\emph{przyspiesza}, podczas gdy quicksort i~introsort zachowują się~niemal stabilnie
+(nieznaczne przyspieszenie). Dla~$n=10^6$ czasy merge sorta maleją z~$103{,}1$~ms (losowe)
+do~$44{,}5$~ms~(75\,\% posortowane), tj.~o~$57\,\%$.
+
+Przyspieszenie merge sorta wynika z~faktu, że~gdy~jedna z~łączonych podtablic ma~wszystkie elementy
+mniejsze od~drugiej, pętla scalania kończy się wcześnie --- faza porównań zamyka~się~w~$O(n)$
+z~niskim stałym narzutem, a~reszta to~proste kopiowanie. Na~tablicach prawie posortowanych merge
+sort staje~się więc efektywnie bliższy liniowemu.
+
+Quicksort na~tym etapie zaczyna z~kolei tracić przewagę nad~merge sortem: dla~$75\,\%$~posortowania
+jest już o~$41\,\%$ wolniejszy ($62{,}5$~ms vs.~$44{,}5$~ms dla~merge sorta przy~$n=10^6$).
+
+\subsection{Dane prawie posortowane (95\,\%--99,7\,\%) --- kluczowa obserwacja}
+
+Najwyraźniejsze zjawisko w~całym eksperymencie pojawia się~dla~wysokich stopni wstępnego
+uporządkowania. Ilustruje je~rys.~\ref{fig:time_sorted_997} oraz zestawienie:
+\begin{center}
+\begin{tabular}{rrrr}
+\toprule
+$n=10^6$, \% pos. & Merge [ms] & Quicksort med-3 [ms] & Introsort [ms] \\
+\midrule
+$95\,\%$    & $31{,}67$  & $80{,}49$   & $89{,}21$  \\
+$99\,\%$    & $33{,}61$  & $205{,}51$  & $96{,}79$  \\
+$99{,}7\,\%$& $25{,}58$  & $397{,}81$  & $106{,}75$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Quicksort staje~się od~$2{,}5\times$ do~$15{,}5\times$ wolniejszy od~merge sorta, podczas~gdy
+merge sort dalej przyspiesza. \textbf{Mimo~zastosowania mediany z~trzech} quicksort silnie
+degraduje się~na~tablicach niemal posortowanych. Przyczyna jest następująca: gdy~początkowy,
+długi prefiks~jest posortowany rosnąco, pivot wybrany jako mediana z~trzech pozycji
+\{\texttt{arr[lo]},~\texttt{arr[mid]},~\texttt{arr[hi]}\} w~pierwszych wywołaniach rekurencyjnych
+bardzo~często pochodzi z~posortowanego prefiksu (ma~wartość stosunkowo niewielką
+w~porównaniu z~elementami z~\emph{losowej} reszty tablicy). W~efekcie partycja rozdziela tablicę
+skrajnie asymetrycznie: do~lewej trafia niewielka część prefiksu, a~do~prawej praktycznie cała
+reszta. Rekurencja staje~się głęboko niezrównoważona i~koszt operacji partycjonowania mocno rośnie.
+
+Warto podkreślić, że~quicksort \emph{nie} schodzi tu~do~$O(n^2)$ --- sprawdzenie~empiryczne
+pokazuje, że~jego czas nadal rośnie proporcjonalnie do~$n\log n$, ale~z~wyraźnie większą stałą
+proporcjonalności (dla~$99{,}7\,\%$~posortowania stała jest ok.~$15\!\times$ większa niż
+w~przypadku losowym). Mediana z~trzech robi swoją robotę --- zapobiega~degradacji~asymptotycznej ---
+ale~nie~neutralizuje~efektu~niezrównoważonych partycji w~dalszych~wywołaniach.
+
+Introsort jest w~tej~samej~sytuacji zdecydowanie bezpieczniejszy: po~przekroczeniu limitu
+głębokości rekurencji ($2\log_2 n \approx 40$ dla~$n=10^6$) algorytm przechodzi na~heapsort,
+który~gwarantuje $O(n\log n)$ bez~względu~na~rozkład. Dzięki~temu czas introsorta w~scenariuszu
+$99{,}7\,\%$ posortowania ($106{,}75$~ms) pozostaje tego~samego~rzędu co~dla~danych losowych
+($77{,}4$~ms) --- stała proporcjonalności rośnie~tylko~$\approx\! 1{,}4\!\times$.
+
+\subsection{Dane odwrócone}
+
+Scenariusz \emph{reverse}, wbrew pierwszej intuicji, \emph{nie jest} scenariuszem najgorszym dla
+quicksorta z~medianą z~trzech. Przeciwnie: dla~tablicy posortowanej dokładnie malejąco, elementy
+pierwszy, środkowy i~ostatni to~odpowiednio najwyższy, mediana i~najniższy element zbioru. Ich
+mediana to~\emph{prawdziwa} mediana zbioru, co~daje partycję idealnie zrównoważoną.
+
+Dla~$n=10^6$ czasy wynoszą: merge sort $29{,}7$~ms, quicksort $42{,}2$~ms, introsort $39{,}9$~ms
+(rys.~\ref{fig:time_reverse}). Merge sort wygrywa, ponownie dzięki wczesnemu kończeniu fazy
+scalania (po~odwróceniu każda lewa podtablica jest~w~całości większa~od~prawej przy~scalaniu
+rosnącym, więc porównania kończą~się w~kilku~krokach). Quicksort i~introsort są bliskie siebie,
+nieco wolniejsze od~merge sorta, ale~\emph{bez} żadnej degradacji --- co~ilustruje siłę~mediany
+z~trzech dla~tego~konkretnego~rozkładu.
+
+\subsection{Empiryczna weryfikacja złożoności}
+
+Wykres znormalizowany (rys.~\ref{fig:normalized}) oraz obserwacja stosunku czasów przy~podwojeniu
+$n$ potwierdzają empirycznie, że~wszystkie trzy algorytmy działają w~czasie $\Theta(n\log n)$
+w~każdym badanym scenariuszu. Dla~$n$ rosnącego z~$10^5$ do~$10^6$ (czyli~$10\times$) oczekiwany
+stosunek czasów wynosi~$\log_2(10^6)/\log_2(10^5) \cdot 10 \approx 12$; zmierzone stosunki mieszczą
+się w~przedziale~$11$--$13$ dla~większości par (scenariusz,~algorytm). Jedynym~scenariuszem
+z~nieco~większym stosunkiem (rzędu~$15$) jest quicksort na~danych~prawie posortowanych ---
+świadczy to~o~rosnącej~stałej proporcjonalności, ale~nadal nie~o~asymptotycznej~degradacji do~$O(n^2)$
+(która dałaby stosunek~$\approx\! 100$).
 
 \section{Wnioski}
 
-\paragraph{Stabilność introsortu.}
-Introsort okazuje się najbardziej zrównoważonym algorytmem — jego czas zmienia się łagodnie
-pomiędzy scenariuszami i~rośnie liniowo-logarytmicznie z~rozmiarem tablicy.
-
-\paragraph{Słaby punkt quicksorta — tablice \emph{prawie} posortowane.}
-Quicksort z~medianą z~trzech radzi sobie dobrze z~danymi losowymi i~odwróconymi, ale widocznie
-zwalnia na~tablicach prawie-posortowanych ($\geq 95\,\%$ uporządkowanych), ponieważ wybór pivota
-z~trzech elementów posortowanego prefiksu daje bardzo niezrównoważone partycje.
-
 \paragraph{Przewidywalność merge sorta.}
-Merge sort prezentuje najmniejszą wariancję czasów — jego koszt praktycznie nie~zależy od~rozkładu
-wejścia, co~czyni go~atrakcyjnym tam, gdzie ważny jest przewidywalny czas sortowania. Kosztem jest
-dodatkowa pamięć $\Theta(n)$.
+Merge sort okazuje się algorytmem najbardziej~\emph{przewidywalnym}: jego czas zmienia się w~granicach
+od~$25{,}6$~ms (99,7\,\%~posortowane) do~$103{,}1$~ms (losowe) dla~$n=10^6$, jednak~w~każdym scenariuszu
+pozostaje~$\Theta(n\log n)$. Co~więcej, merge sort jako~jedyny z~trzech algorytmów aktywnie
+\emph{korzysta} z~wstępnego uporządkowania danych --- na~tablicy~$99{,}7\,\%$~posortowanej jest
+$4\times$~szybszy niż~na~losowej. Kosztem jest dodatkowa pamięć~$\Theta(n)$, która dla~$n=10^6$ i~elementów
+typu~\texttt{int} oznacza~$4$~MB~bufora, oraz~fakt, że~dla~danych losowych jest najwolniejszy z~trójki.
 
-% TODO: Rozwinąć powyższe obserwacje w~pełne akapity po~przejrzeniu tabel wynikowych.
+\paragraph{Introsort --- najbardziej uniwersalny wybór.}
+Introsort oferuje najbardziej zrównoważony profil: jest~najszybszy dla~danych losowych
+i~jednocześnie nie~ulega spektakularnej degradacji w~żadnym z~badanych scenariuszy. Dzięki
+mechanizmowi przełączania na~heapsort gwarantuje $O(n\log n)$ niezależnie od~rozkładu wejścia,
+a~sortowanie przez wstawianie na~krótkich podtablicach daje mu~drobną przewagę w~praktyce. To
+algorytm, który~zaleciłabym jako~domyślny wybór w~sytuacjach, gdy~rozkład~danych nie~jest~znany
+z~góry, a~dodatkowa pamięć liniowa jest~niepożądana.
+
+\paragraph{Zaskakujący słaby punkt quicksorta z~medianą z~trzech.}
+W~sprzeczności z~naiwną intuicją, quicksort~radzi sobie~\emph{gorzej} na~tablicach prawie
+posortowanych niż~na~losowych. Zjawisko to~było spodziewane w~ogólnym~sensie (niezrównoważenie
+partycji), ale~skala obserwowanego spowolnienia ($15{,}5\times$~względem~merge~sorta dla~danych
+$99{,}7\,\%$~posortowanych) była~jakościowo inna niż~dla~pozostałych scenariuszy. Praktyczny wniosek:
+choć~mediana z~trzech eliminuje~asymptotyczną~degradację do~$O(n^2)$ dla~danych posortowanych,
+\emph{nie}~eliminuje~narzutu~stałej~proporcjonalności w~scenariuszu \emph{prawie}~posortowanym.
+Jeżeli~aplikacja~ma~do~czynienia z~takim~rozkładem~danych, należy~użyć introsorta lub~merge sorta,
+a~nie~samego quicksorta.
+
+\paragraph{Zgodność z~przewidywaną złożonością.}
+Wszystkie~trzy algorytmy zachowały się w~każdym~scenariuszu zgodnie z~przewidywaną złożonością
+$\Theta(n\log n)$. Wykres znormalizowanego czasu oraz~stosunki czasów dla~rosnącego~$n$ potwierdzają
+tę zależność. Zaobserwowane~różnice między~algorytmami sprowadzają się do~\emph{stałych
+proporcjonalności}, które okazały~się wyraźnie zależne~od~rozkładu danych --- zjawisko niewidoczne
+w~czysto~asymptotycznej analizie teoretycznej.
+
+\paragraph{Rola mediany z~trzech.}
+Empirycznie potwierdziliśmy, że~wybór pivota metodą mediany~z~trzech chroni quicksort przed
+degradacją asymptotyczną w~scenariuszach \emph{sorted}~($100\,\%$~posortowane) i~\emph{reverse}
+($100\,\%$~odwrócone) --- w~obu~czasy pozostają $\Theta(n\log n)$. Dla~scenariusza reverse jest
+to~wręcz~jeden~z~najszybszych biegów~quicksorta w~całym~eksperymencie (dzięki~idealnie
+zrównoważonym~partycjom, jakie~daje~mediana pozycji skrajnych i~środkowej).
 
 \section{Literatura}
 
 \begin{enumerate}[nosep]
-  \item T. H. Cormen, C. E. Leiserson, R. L. Rivest, C. Stein, \emph{Wprowadzenie do algorytmów},
-  WNT / PWN, wydanie III.
-  \item D. R. Musser, \emph{Introspective Sorting and Selection Algorithms},
-  Software: Practice and Experience, 27(8), 1997.
-  \item R. Sedgewick, \emph{Implementing Quicksort Programs},
-  Communications of the ACM, 21(10), 1978.
-  \item Dokumentacja \texttt{std::chrono}, \url{https://en.cppreference.com/w/cpp/chrono}.
+  \item T.~H.~Cormen, C.~E.~Leiserson, R.~L.~Rivest, C.~Stein, \emph{Wprowadzenie do algorytmów},
+  Wydawnictwo Naukowe PWN, wydanie trzecie.
+  \item D.~R.~Musser, \emph{Introspective Sorting and Selection Algorithms},
+  Software: Practice and Experience, 27(8), 1997, s.~983--993.
+  \item R.~Sedgewick, \emph{Implementing Quicksort Programs},
+  Communications of the ACM, 21(10), 1978, s.~847--857.
+  \item Dokumentacja biblioteki standardowej C++ (\texttt{std::sort}, \texttt{std::chrono}):
+  \url{https://en.cppreference.com/w/cpp/algorithm/sort},
+  \url{https://en.cppreference.com/w/cpp/chrono}.
+  \item N.~Wirth, \emph{Algorytmy + Struktury danych = Programy}, WNT, Warszawa.
 \end{enumerate}
 
 \end{document}
